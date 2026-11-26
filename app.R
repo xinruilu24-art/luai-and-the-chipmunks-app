@@ -486,11 +486,14 @@ server <- function(input, output, session) {
     sprintf("%.1f hrs", median(d$ai_hours_saved_week, na.rm = TRUE))
   })
 
+  # one zoom slider per question: switching question then draws the chart once, not first with the old range and again
+  # with the new one (that double redraw made the chart flash). A question you come back to keeps its zoom.
   output$ov_xlim_ui <- renderUI({
     req(input$ov_var)
     r <- range(survey[[input$ov_var]], na.rm = TRUE)
     lo <- floor(r[1]); hi <- ceiling(r[2])
-    sliderInput("ov_xlim", "Zoom horizontal axis", min = lo, max = hi, value = c(lo, hi),
+    id <- paste0("ov_xlim_", input$ov_var)
+    sliderInput(id, "Zoom horizontal axis", min = lo, max = hi, value = isolate(input[[id]]) %||% c(lo, hi),
                 step = 1, ticks = FALSE)
   })
 
@@ -498,7 +501,7 @@ server <- function(input, output, session) {
   output$ov_bins_ui <- renderUI({
     req(input$ov_var)
     if (input$ov_var %in% score_vars) return(NULL)  # one bar per score, so no bar slider
-    sliderInput("ov_bins", "Bars", min = 5, max = 40, value = 15, ticks = FALSE)
+    sliderInput("ov_bins", "Bars", min = 5, max = 40, value = isolate(input$ov_bins) %||% 15, ticks = FALSE)  # keeps your choice
   })
 
   ov_values <- reactive({
@@ -507,7 +510,9 @@ server <- function(input, output, session) {
   })
 
   output$ov_plot <- renderGirafe({
-    req(input$ov_xlim)
+    xlim <- input[[paste0("ov_xlim_", input$ov_var)]]
+    req(xlim, cancelOutput = TRUE)  # until this question's slider is ready, keep showing the current chart
+    if (!input$ov_var %in% score_vars) req(input$ov_bins, cancelOutput = TRUE)
     x <- ov_values(); lab <- label_of(input$ov_var); lo <- min(x); hi <- max(x)
     bin_lab <- function(a, b) {  # tooltip bin range, kept inside the data range
       a <- round(pmax(a, lo), 1); b <- round(pmin(b, hi), 1)
@@ -523,10 +528,10 @@ server <- function(input, output, session) {
          geom_histogram_interactive(aes(tooltip = after_stat(paste0("<b>", lab, "</b><br>", bin_lab(xmin, xmax), ": ", count,
                                                                     if_else(count == 1, " student", " students"))),
                                         data_id = after_stat(as.character(x))),
-                                    bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], colour = "white")) +
+                                    bins = input$ov_bins, fill = pal()[1], colour = "white")) +
       geom_vline(xintercept = median(x), linetype = "dashed", colour = "#E8202A", linewidth = 1.1) +  # bright red median line
       (if (input$ov_var %in% score_vars) scale_x_continuous(breaks = 1:10)) +
-      coord_cartesian(xlim = input$ov_xlim + if (input$ov_var %in% score_vars) c(-0.5, 0.5) else 0) +
+      coord_cartesian(xlim = xlim + if (input$ov_var %in% score_vars) c(-0.5, 0.5) else 0) +
       labs(title = paste("How answers are spread:", label_of(input$ov_var)),
            subtitle = "Red dashed line = typical (median) student",
            x = label_of(input$ov_var), y = "Number of students") +
