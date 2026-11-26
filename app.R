@@ -865,7 +865,8 @@ server <- function(input, output, session) {
     long <- as.data.frame(as.table(cm)); names(long) <- c("a", "b", "r")
     ggplot(long, aes(a, b, fill = r)) +
       geom_tile(colour = "white") +
-      geom_text(aes(label = ifelse(is.na(r), "\u2013", sprintf("%.2f", r))), size = 3.4) +
+      geom_text(aes(label = ifelse(is.na(r), "\u2013", sprintf("%.2f", r)), colour = !is.na(r) & r >= 0.7), size = 3.4) +
+      scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = "black"), guide = "none") +  # white numbers on dark tiles
       scale_fill_gradient(low = "#FFFFFF", high = pal()[1], limits = c(min(0, min(long$r, na.rm = TRUE)), 1), name = "Correlation",
                           breaks = scales::breaks_pretty(n = 4), labels = scales::label_number(accuracy = 0.1),
                           guide = guide_colourbar(barwidth = grid::unit(14, "lines"),  # wider bar so the numbers do not overlap
