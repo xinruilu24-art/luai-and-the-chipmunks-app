@@ -860,7 +860,7 @@ server <- function(input, output, session) {
     validate(need(nrow(d) > 0, "Not enough students to compute alpha."))
     p <- ggplot(d, aes(Group, alpha)) +
       geom_hline(yintercept = c(.7, .8), linetype = "22", colour = "#E8202A", linewidth = 0.5) +  # thin, short dashes
-      annotate("text", x = -Inf, y = c(.7, .8), label = c("acceptable", "good"), vjust = -0.5, hjust = 0, size = 3.5, colour = "#6b6a80")
+      annotate("text", x = -Inf, y = c(.7, .8), label = c("acceptable", "good"), vjust = -0.5, hjust = 0, size = 3.5, colour = "#E8202A")  # same red as the lines
     p <- if (input$r4_split)
       p + geom_col_interactive(aes(fill = Status, group = Status, data_id = paste(Group, Status),
                                    tooltip = paste0(Group, " \u00b7 ", Status, "<br>Cronbach\u2019s \u03b1 = ", sprintf("%.2f", alpha),
