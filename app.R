@@ -245,6 +245,16 @@ likert_bar <- function(long, block, item_order, fills, show = c("fill", "stack")
   p
 }
 
+# Wrap a ggplot as an interactive (ggiraph) chart. Hovering shows a small label with the numbers.
+# fade = TRUE: the hovered mark keeps its colour and the other marks fade; axes and text never fade.
+hover_plot <- function(p, height, fade = TRUE) {
+  girafe(ggobj = p, width_svg = 10, height_svg = height / 100,
+         options = list(opts_hover(css = "opacity:1;"),
+                        opts_hover_inv(css = if (fade) "opacity:0.3;" else "opacity:1;"),
+                        opts_tooltip(css = "background:#1F2A37;color:#FFFFFF;padding:6px 10px;border-radius:6px;font-size:13px;"),
+                        opts_toolbar(saveaspng = FALSE), opts_selection(type = "none")))
+}
+
 # lighter green for the two green value boxes (dark text stays readable)
 light_green <- value_box_theme(bg = "#8ED1C8", fg = cfg$colours[["ink"]])
 
@@ -279,13 +289,13 @@ ui <- page_navbar(
       value_box("Average AI use frequency (1\u201310)", textOutput("vb_ai"), theme = "primary"),
       value_box("Typical hours per week AI saves", textOutput("vb_saved"), theme = light_green)
     ),
-    analysis_card("Explore one question at a time", "ov_plot", "ov_interp", height = 340,
+    analysis_card("Explore one question at a time", "ov_plot", "ov_interp", height = 340, interactive = TRUE,
       controls = ctrl_row(
         selectInput("ov_var", "Question", choices = num_labels, selected = "ai_use_frequency"),
         uiOutput("ov_xlim_ui"),
         uiOutput("ov_bins_ui")
       )),
-    analysis_card("Who answered?", "ov_profile", "ov_profile_interp", height = 320)
+    analysis_card("Who answered?", "ov_profile", "ov_profile_interp", height = 320, interactive = TRUE)
   )),
 
   nav_panel("RQ1: Activities", page_body(
@@ -304,7 +314,7 @@ ui <- page_navbar(
   nav_panel("RQ2: Domestic vs international", page_body(
     navset_card_pill(
       title = "Do international and domestic students differ in how they use AI?",
-      nav_panel("Proportions", analysis_body("r2p_plot", "r2p_interp", height = 430,
+      nav_panel("Proportions", analysis_body("r2p_plot", "r2p_interp", height = 430, interactive = TRUE,
         controls = ctrl_row(
           selectInput("r2_block", "Topic", choices = block_choices, selected = "replace"),
           sliderInput("r2_xlim", "Horizontal range", min = 0, max = 1, value = c(0, 1), step = 0.05, ticks = FALSE)),
@@ -338,7 +348,7 @@ ui <- page_navbar(
   )),
 
   nav_panel("RQ4: Consistency", page_body(
-    analysis_card("Do the questions in each set move together?", "r4_plot", "r4_interp", height = 340,
+    analysis_card("Do the questions in each set move together?", "r4_plot", "r4_interp", height = 340, interactive = TRUE,
       controls = ctrl_row(
         checkboxInput("r4_split", "Compare student status", FALSE),
         sliderInput("r4_ylim", "Vertical range", min = 0, max = 1, value = c(0, 1), step = 0.05, ticks = FALSE)),
@@ -494,14 +504,24 @@ server <- function(input, output, session) {
     x <- d[[input$ov_var]]; x[!is.na(x)]
   })
 
-  output$ov_plot <- renderPlot({
+  output$ov_plot <- renderGirafe({
     req(input$ov_xlim)
-    x <- ov_values()
-    ggplot(data.frame(x = x), aes(x)) +
+    x <- ov_values(); lab <- label_of(input$ov_var); lo <- min(x); hi <- max(x)
+    bin_lab <- function(a, b) {  # tooltip bin range, kept inside the data range
+      a <- round(pmax(a, lo), 1); b <- round(pmin(b, hi), 1)
+      ifelse(a == b, as.character(a), paste0(a, "\u2013", b))
+    }
+    p <- ggplot(data.frame(x = x), aes(x)) +
       (if (input$ov_var %in% score_vars)
-         geom_histogram(binwidth = 1, center = 0, fill = pal()[1], colour = "white")  # bars centred on 1, 2, ..., 10
+         geom_histogram_interactive(aes(tooltip = after_stat(paste0("<b>", lab, "</b><br>Score ", x, ": ", count, if_else(count == 1, " student", " students"),
+                                                                    " (", round(100 * count / sum(count)), "%)")),
+                                        data_id = after_stat(as.character(x))),
+                                    binwidth = 1, center = 0, fill = pal()[1], colour = "white")  # bars centred on 1, 2, ..., 10
        else
-         geom_histogram(bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], colour = "white")) +
+         geom_histogram_interactive(aes(tooltip = after_stat(paste0("<b>", lab, "</b><br>", bin_lab(xmin, xmax), ": ", count,
+                                                                    if_else(count == 1, " student", " students"))),
+                                        data_id = after_stat(as.character(x))),
+                                    bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], colour = "white")) +
       geom_vline(xintercept = median(x), linetype = "dashed", colour = "#E8202A", linewidth = 1.1) +  # bright red median line
       (if (input$ov_var %in% score_vars) scale_x_continuous(breaks = 1:10)) +
       coord_cartesian(xlim = input$ov_xlim + if (input$ov_var %in% score_vars) c(-0.5, 0.5) else 0) +
@@ -509,6 +529,7 @@ server <- function(input, output, session) {
            subtitle = "Red dashed line = typical (median) student",
            x = label_of(input$ov_var), y = "Number of students") +
       plot_theme()
+    hover_plot(p, 340)
   })
 
   output$ov_interp <- renderUI({
@@ -527,13 +548,16 @@ server <- function(input, output, session) {
       count(band, status, .drop = FALSE)
   })
 
-  output$ov_profile <- renderPlot({
-    ggplot(profile_data(), aes(n, band, fill = status)) +
-      geom_col(position = position_dodge2(preserve = "single")) +
+  output$ov_profile <- renderGirafe({
+    p <- ggplot(profile_data(), aes(n, band, fill = status)) +
+      geom_col_interactive(aes(tooltip = paste0("cGPA band ", band, " \u00b7 ", status, "<br>", n, if_else(n == 1, " student", " students")),
+                               data_id = paste(band, status), group = status),
+                           position = position_dodge2(preserve = "single")) +
       scale_fill_manual(values = pal()[1:2], drop = FALSE, name = "Student status") +
       scale_y_discrete(limits = rev) +
       labs(title = "Respondents by cGPA band", x = "Number of students", y = "cGPA band") +
       plot_theme()
+    hover_plot(p, 320)
   })
 
   output$ov_profile_interp <- renderUI({
@@ -564,12 +588,7 @@ server <- function(input, output, session) {
   output$r1_plot <- renderGirafe({
     p <- likert_bar(r1_long(), r1_block(), r1_share()$item, seq_cols(5), input$r1_show, input$r1_split == "status") +
       plot_theme() + theme(panel.spacing.x = grid::unit(2, "lines"))  # keeps "100%" and "0%" apart when split
-    girafe(ggobj = p, width_svg = 10, height_svg = 4.7,
-           # hovered bar keeps its own colour (no border); only the other bars fade, axes and text stay as they are
-           options = list(opts_hover(css = "opacity:1;"),
-                          opts_hover_inv(css = "opacity:0.3;"),
-                          opts_tooltip(css = "background:#1F2A37;color:#FFFFFF;padding:6px 10px;border-radius:6px;font-size:13px;"),
-                          opts_toolbar(saveaspng = FALSE), opts_selection(type = "none")))
+    hover_plot(p, 470)
   })
 
   r1_tab <- reactive({
@@ -615,18 +634,20 @@ server <- function(input, output, session) {
     long
   })
 
-  output$r2p_plot <- renderPlot({
+  output$r2p_plot <- renderGirafe({
     d <- r2p_data(); b <- likert_blocks[[input$r2_block]]
     ord <- d |> group_by(item) |> summarise(m = mean(p)) |> arrange(m)
     d$item <- factor(d$item, levels = ord$item)
-    ggplot(d, aes(p, item, colour = status, shape = status)) +
-      geom_point(size = 4, alpha = .9) +
+    p <- ggplot(d, aes(p, item, colour = status, shape = status)) +
+      geom_point_interactive(aes(tooltip = paste0(item, " \u00b7 ", status, "<br>", sprintf("%.0f%%", 100 * p), " (", k, " of ", n, " students)"),
+                                 data_id = paste(item, status)), size = 4, alpha = .9) +
       scale_colour_manual(values = pal()[1:2], name = "Student status") +
       scale_shape_manual(values = c(16, 17), name = "Student status") +
       scale_x_continuous(labels = scales::percent_format(), limits = input$r2_xlim, oob = scales::oob_keep) +
       labs(title = b$title, subtitle = paste("Share of students answering", b$atleast),
            x = "Share of students in each group", y = "Item") +
       plot_theme()
+    hover_plot(p, 430, fade = FALSE)
   })
 
   r2p_tab <- reactive({
@@ -836,25 +857,32 @@ server <- function(input, output, session) {
     out
   })
 
-  output$r4_plot <- renderPlot({
+  output$r4_plot <- renderGirafe({
     d <- r4_alpha(); d <- d[!is.na(d$alpha), ]
     validate(need(nrow(d) > 0, "Not enough students to compute alpha."))
     p <- ggplot(d, aes(Group, alpha)) +
       geom_hline(yintercept = c(.7, .8), linetype = "dashed", colour = "#E8202A", linewidth = 0.8) +
       annotate("text", x = -Inf, y = c(.7, .8), label = c("acceptable", "good"), vjust = -0.5, hjust = 0, size = 3.5, colour = "#6b6a80")
     p <- if (input$r4_split)
-      p + geom_col(aes(fill = Status), position = position_dodge(.8), width = .7) +
+      p + geom_col_interactive(aes(fill = Status, group = Status, data_id = paste(Group, Status),
+                                   tooltip = paste0(Group, " \u00b7 ", Status, "<br>Cronbach\u2019s \u03b1 = ", sprintf("%.2f", alpha),
+                                                    " (", alpha_label(alpha), "), ", Students, " students")),
+                               position = position_dodge(.8), width = .7) +
         geom_text(aes(label = sprintf("%.2f", alpha), group = Status, vjust = ifelse(alpha < 0, 1.4, -0.4)), position = position_dodge(.8), size = 3.8) +
         scale_fill_manual(values = pal()[1:2], name = "Student status")
     else
-      p + geom_col(aes(fill = Group), width = .6, show.legend = FALSE) +
+      p + geom_col_interactive(aes(fill = Group, data_id = Group,
+                                   tooltip = paste0(Group, "<br>Cronbach\u2019s \u03b1 = ", sprintf("%.2f", alpha),
+                                                    " (", alpha_label(alpha), "), ", Students, " students")),
+                               width = .6, show.legend = FALSE) +
         geom_text(aes(label = sprintf("%.2f", alpha), vjust = ifelse(alpha < 0, 1.4, -0.4)), size = 4 * 1.3, fontface = "bold") +  # 30% larger, bold
         scale_fill_manual(values = rep_len(pal(), 3))
     # a negative alpha is shown below 0 instead of being cut off
-    p + coord_cartesian(ylim = c(min(input$r4_ylim[1], min(d$alpha) - 0.1), input$r4_ylim[2])) +
+    p <- p + coord_cartesian(ylim = c(min(input$r4_ylim[1], min(d$alpha) - 0.1), input$r4_ylim[2])) +
       scale_x_discrete(labels = scales::label_wrap(22)) +  # the full set names are long, so wrap them
       labs(title = "How consistently does each set of questions move together?", x = "Question set", y = "Cronbach\u2019s alpha") +
       plot_theme()
+    hover_plot(p, 340)
   })
 
   output$r4_table <- renderTable({
