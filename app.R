@@ -8,7 +8,7 @@ library(dplyr)
 library(tidyr)
 library(readr)
 library(DT)
-library(ggiraph)  # hover highlight and tooltips on the RQ1 chart
+library(ggiraph)  # hover highlight and tooltips on the RQ1, Overview and RQ4 charts
 
 # ------------------------------------------------------------------ DATA ----
 raw <- read_csv("survey_data.csv", show_col_types = FALSE)
