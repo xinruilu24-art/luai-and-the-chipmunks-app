@@ -8,6 +8,7 @@ library(dplyr)
 library(tidyr)
 library(readr)
 library(DT)
+library(ggiraph)  # hover highlight and tooltips on the RQ1 chart
 
 # ------------------------------------------------------------------ DATA ----
 raw <- read_csv("survey_data.csv", show_col_types = FALSE)
@@ -171,10 +172,11 @@ app_theme <- bs_theme(
 page_body  <- function(...) div(class = "page", ...)
 ctrl_row   <- function(..., widths = NULL) layout_columns(fill = FALSE, col_widths = widths, class = "ctrl-row", ...)
 # controls -> plot -> plain-English box -> collapsed numbers
-analysis_body <- function(plot_id, interp_id = NULL, controls = NULL, details = NULL, height = cfg$plot_height) {
+analysis_body <- function(plot_id, interp_id = NULL, controls = NULL, details = NULL, height = cfg$plot_height,
+                          interactive = FALSE) {
   tagList(
     controls,
-    plotOutput(plot_id, height = height),
+    if (interactive) girafeOutput(plot_id, height = paste0(height, "px")) else plotOutput(plot_id, height = height),
     if (!is.null(interp_id)) uiOutput(interp_id),
     if (!is.null(details)) accordion(open = FALSE, accordion_panel("Show the numbers", details))
   )
@@ -221,11 +223,20 @@ compare_means <- function(d, v, group = "status") {
 }
 
 # Stacked 100% / count bars for a Likert block. long: item, score (factor), status; item_order: items low -> high.
+# Interactive (ggiraph): hovering a segment highlights it and shows its share and number of students.
 likert_bar <- function(long, block, item_order, fills, show = c("fill", "stack"), split = FALSE) {
   show <- match.arg(show)
-  long$item <- factor(long$item, levels = item_order)
-  p <- ggplot(long, aes(y = item, fill = score)) +
-    geom_bar(position = show, colour = "white", linewidth = .3) +
+  grp <- if (split) c("item", "status") else "item"
+  d <- long |>
+    count(across(all_of(c(grp, "score"))), name = "n", .drop = FALSE) |>
+    group_by(across(all_of(grp))) |> mutate(share = n / sum(n)) |> ungroup() |>
+    filter(n > 0) |>
+    mutate(item = factor(item, levels = item_order),
+           tip = paste0("<b>", item, "</b>", if (split) paste0(" \u00b7 ", status) else "", "<br>",
+                        score, ": ", sprintf("%.0f%%", 100 * share), " (", n, if_else(n == 1, " student)", " students)")),
+           id = paste(item, if (split) status else "", score))
+  p <- ggplot(d, aes(x = if (show == "fill") share else n, y = item, fill = score)) +
+    geom_col_interactive(aes(tooltip = tip, data_id = id, group = score), position = "stack", colour = "white", linewidth = .3) +
     scale_fill_manual(values = fills, name = block$legend, drop = FALSE) +
     guides(fill = guide_legend(nrow = 2)) +
     labs(title = block$title, y = "Item", x = if (show == "fill") "Share of students" else "Number of students")
@@ -279,7 +290,7 @@ ui <- page_navbar(
 
   nav_panel("RQ1: Activities", page_body(
     analysis_card(textOutput("r1_header", inline = TRUE), "r1_plot", "r1_interp",  # header follows the Topic choice
-      height = 470,
+      height = 470, interactive = TRUE,
       controls = ctrl_row(
         selectInput("r1_block", "Topic", choices = block_choices, selected = "replace"),
         radioButtons("r1_show", "Show", choices = c("Percent" = "fill", "Count" = "stack"), inline = TRUE),
@@ -550,9 +561,14 @@ server <- function(input, output, session) {
       summarise(share = mean(as.integer(score) >= 3), .groups = "drop") |> arrange(share)
   })
 
-  output$r1_plot <- renderPlot({
-    likert_bar(r1_long(), r1_block(), r1_share()$item, seq_cols(5), input$r1_show, input$r1_split == "status") +
-      plot_theme()
+  output$r1_plot <- renderGirafe({
+    p <- likert_bar(r1_long(), r1_block(), r1_share()$item, seq_cols(5), input$r1_show, input$r1_split == "status") +
+      plot_theme() + theme(panel.spacing.x = grid::unit(2, "lines"))  # keeps "100%" and "0%" apart when split
+    girafe(ggobj = p, width_svg = 10, height_svg = 4.7,
+           options = list(opts_hover(css = "stroke:#1F2A37;stroke-width:2px;"),
+                          opts_hover_inv(css = "opacity:0.35;"),
+                          opts_tooltip(css = "background:#1F2A37;color:#FFFFFF;padding:6px 10px;border-radius:6px;font-size:13px;"),
+                          opts_toolbar(saveaspng = FALSE), opts_selection(type = "none")))
   })
 
   r1_tab <- reactive({
