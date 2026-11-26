@@ -166,6 +166,8 @@ app_theme <- bs_theme(
   .accordion-button { font-size: .9rem; font-weight: 600; }
   .accordion-button:not(.collapsed) { background: @bg@; color: @primary@; box-shadow: none; }
   .table { font-size: .9rem; }
+  /* hover charts: wait a moment before the faded bars come back, so moving across the gap between bars does not flash */
+  :where(.girafe) [data-id] { transition: opacity .25s ease .4s; }
 ", cfg$colours))
 
 # ------------------------------------------------- REUSABLE UI BUILDERS ----
@@ -249,8 +251,8 @@ likert_bar <- function(long, block, item_order, fills, show = c("fill", "stack")
 # The hovered mark keeps its colour and the other marks fade; axes and text never fade.
 hover_plot <- function(p, height) {
   girafe(ggobj = p, width_svg = 10, height_svg = height / 100,
-         options = list(opts_hover(css = "opacity:1;"),
-                        opts_hover_inv(css = "opacity:0.3;"),
+         options = list(opts_hover(css = "opacity:1;transition:opacity .15s ease;"),
+                        opts_hover_inv(css = "opacity:0.3;transition:opacity .15s ease;"),  # fading starts at once
                         opts_tooltip(css = "background:#1F2A37;color:#FFFFFF;padding:6px 10px;border-radius:6px;font-size:13px;"),
                         opts_toolbar(saveaspng = FALSE), opts_selection(type = "none")))
 }
