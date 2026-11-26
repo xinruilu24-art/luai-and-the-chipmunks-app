@@ -565,8 +565,9 @@ server <- function(input, output, session) {
     p <- likert_bar(r1_long(), r1_block(), r1_share()$item, seq_cols(5), input$r1_show, input$r1_split == "status") +
       plot_theme() + theme(panel.spacing.x = grid::unit(2, "lines"))  # keeps "100%" and "0%" apart when split
     girafe(ggobj = p, width_svg = 10, height_svg = 4.7,
-           options = list(opts_hover(css = "stroke:#1F2A37;stroke-width:2px;"),
-                          opts_hover_inv(css = "opacity:0.35;"),
+           # hovered bar keeps its own colour (no border); only the other bars fade, axes and text stay as they are
+           options = list(opts_hover(css = "opacity:1;"),
+                          opts_hover_inv(css = "opacity:0.3;"),
                           opts_tooltip(css = "background:#1F2A37;color:#FFFFFF;padding:6px 10px;border-radius:6px;font-size:13px;"),
                           opts_toolbar(saveaspng = FALSE), opts_selection(type = "none")))
   })
