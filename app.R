@@ -831,7 +831,7 @@ server <- function(input, output, session) {
         scale_fill_manual(values = pal()[1:2], name = "Student status")
     else
       p + geom_col(aes(fill = Group), width = .6, show.legend = FALSE) +
-        geom_text(aes(label = sprintf("%.2f", alpha), vjust = ifelse(alpha < 0, 1.4, -0.4)), size = 4) +
+        geom_text(aes(label = sprintf("%.2f", alpha), vjust = ifelse(alpha < 0, 1.4, -0.4)), size = 4 * 1.3, fontface = "bold") +  # 30% larger, bold
         scale_fill_manual(values = rep_len(pal(), 3))
     # a negative alpha is shown below 0 instead of being cut off
     p + coord_cartesian(ylim = c(min(input$r4_ylim[1], min(d$alpha) - 0.1), input$r4_ylim[2])) +
