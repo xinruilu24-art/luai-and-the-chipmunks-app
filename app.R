@@ -243,7 +243,7 @@ ui <- page_navbar(
     width = 270, open = "desktop",
     div(class = "counter", textOutput("n_selected")),
     accordion(
-      open = "status",
+      open = TRUE,  # all filter panels start open
       accordion_panel("Student status", value = "status",
         checkboxGroupInput("f_status", NULL, choices = levels(survey$status), selected = levels(survey$status))),
       accordion_panel("cGPA band", value = "cgpa",
@@ -861,7 +861,9 @@ server <- function(input, output, session) {
     ggplot(long, aes(a, b, fill = r)) +
       geom_tile(colour = "white") +
       geom_text(aes(label = ifelse(is.na(r), "\u2013", sprintf("%.2f", r))), size = 3.4) +
-      scale_fill_gradient(low = "#FFFFFF", high = pal()[1], limits = c(min(0, min(long$r, na.rm = TRUE)), 1), name = "Correlation") +
+      scale_fill_gradient(low = "#FFFFFF", high = pal()[1], limits = c(min(0, min(long$r, na.rm = TRUE)), 1), name = "Correlation",
+                          breaks = scales::breaks_pretty(n = 4), labels = scales::label_number(accuracy = 0.1),
+                          guide = guide_colourbar(barwidth = grid::unit(14, "lines"))) +  # wider bar so the numbers do not overlap
       scale_y_discrete(limits = rev) +
       labs(title = b$title, x = "Item", y = "Item") +
       plot_theme() + theme(axis.text.x = element_text(angle = 35, hjust = 1))
