@@ -302,7 +302,9 @@ ui <- page_navbar(
         controls = ctrl_row(
           selectInput("r2_var", "Measure", choices = c("All four side by side" = "all", mean_labels), selected = "all"),
           radioButtons("r2_type", "Style", choices = c("Box" = "box", "Violin" = "violin"), inline = TRUE),
-          checkboxInput("r2_points", "Show students", TRUE),
+          # heading on the same line as MEASURE and STYLE, then the checkbox
+          div(class = "form-group", tags$label(class = "control-label", "Students"),
+              checkboxInput("r2_points", "Show each student as a dot", TRUE)),
           uiOutput("r2_ylim_ui")),
         details = tableOutput("r2m_table"))),
       footer = p(class = "small-note", "The student-status filter is ignored on this tab (otherwise there is nothing to compare); the other filters still apply.")
@@ -486,14 +488,14 @@ server <- function(input, output, session) {
     x <- ov_values()
     ggplot(data.frame(x = x), aes(x)) +
       (if (input$ov_var %in% score_vars)
-         geom_histogram(binwidth = 1, center = 0, fill = pal()[1], alpha = 0.6, colour = "white")  # bars centred on 1, 2, ..., 10
+         geom_histogram(binwidth = 1, center = 0, fill = pal()[1], colour = "white")  # bars centred on 1, 2, ..., 10
        else
-         geom_histogram(bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], alpha = 0.6, colour = "white")) +
-      geom_vline(xintercept = median(x), linetype = "dashed", colour = pal()[2], linewidth = 1) +
+         geom_histogram(bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], colour = "white")) +
+      geom_vline(xintercept = median(x), linetype = "dashed", colour = "#E8202A", linewidth = 1.1) +  # bright red median line
       (if (input$ov_var %in% score_vars) scale_x_continuous(breaks = 1:10)) +
       coord_cartesian(xlim = input$ov_xlim + if (input$ov_var %in% score_vars) c(-0.5, 0.5) else 0) +
       labs(title = paste("How answers are spread:", label_of(input$ov_var)),
-           subtitle = "Dashed line = typical (median) student",
+           subtitle = "Red dashed line = typical (median) student",
            x = label_of(input$ov_var), y = "Number of students") +
       plot_theme()
   })
@@ -655,7 +657,7 @@ server <- function(input, output, session) {
     group_box_plot(r2m_data(), vs, num_labels, "status", pal()[1:2], input$r2_type, input$r2_points,
                    ylim = if (length(vs) == 1) input$r2_ylim else NULL) +
       labs(title = if (length(vs) == 1) paste(label_of(vs), "by student status") else "How domestic and international students compare",
-           subtitle = "Diamond = average; line = median") +
+           subtitle = paste0("Diamond = average; line = median", if (input$r2_points) "; grey dots = individual students")) +
       plot_theme()
   })
 
@@ -821,7 +823,7 @@ server <- function(input, output, session) {
     d <- r4_alpha(); d <- d[!is.na(d$alpha), ]
     validate(need(nrow(d) > 0, "Not enough students to compute alpha."))
     p <- ggplot(d, aes(Group, alpha)) +
-      geom_hline(yintercept = c(.7, .8), linetype = "dashed", colour = "#8C8C9E") +
+      geom_hline(yintercept = c(.7, .8), linetype = "dashed", colour = "#E8202A", linewidth = 0.8) +
       annotate("text", x = -Inf, y = c(.7, .8), label = c("acceptable", "good"), vjust = -0.5, hjust = 0, size = 3.5, colour = "#6b6a80")
     p <- if (input$r4_split)
       p + geom_col(aes(fill = Status), position = position_dodge(.8), width = .7) +
