@@ -234,6 +234,9 @@ likert_bar <- function(long, block, item_order, fills, show = c("fill", "stack")
   p
 }
 
+# lighter green for the two green value boxes (dark text stays readable)
+light_green <- value_box_theme(bg = "#8ED1C8", fg = cfg$colours[["ink"]])
+
 # ------------------------------------------------------------------- UI ----
 ui <- page_navbar(
   title = cfg$title, window_title = paste(cfg$title, "| STA304"),
@@ -261,9 +264,9 @@ ui <- page_navbar(
     layout_columns(
       fill = FALSE, col_widths = breakpoints(sm = c(6, 6), lg = c(3, 3, 3, 3)),
       value_box("Students", textOutput("vb_n"), theme = "primary"),
-      value_box("International", textOutput("vb_intl"), theme = "secondary"),
+      value_box("International", textOutput("vb_intl"), theme = light_green),
       value_box("Average AI use frequency (1\u201310)", textOutput("vb_ai"), theme = "primary"),
-      value_box("Typical hours per week AI saves", textOutput("vb_saved"), theme = "secondary")
+      value_box("Typical hours per week AI saves", textOutput("vb_saved"), theme = light_green)
     ),
     analysis_card("Explore one question at a time", "ov_plot", "ov_interp", height = 340,
       controls = ctrl_row(
@@ -483,9 +486,9 @@ server <- function(input, output, session) {
     x <- ov_values()
     ggplot(data.frame(x = x), aes(x)) +
       (if (input$ov_var %in% score_vars)
-         geom_histogram(binwidth = 1, center = 0, fill = pal()[1], colour = "white")  # bars centred on 1, 2, ..., 10
+         geom_histogram(binwidth = 1, center = 0, fill = pal()[1], alpha = 0.6, colour = "white")  # bars centred on 1, 2, ..., 10
        else
-         geom_histogram(bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], colour = "white")) +
+         geom_histogram(bins = if (is.null(input$ov_bins)) 15 else input$ov_bins, fill = pal()[1], alpha = 0.6, colour = "white")) +
       geom_vline(xintercept = median(x), linetype = "dashed", colour = pal()[2], linewidth = 1) +
       (if (input$ov_var %in% score_vars) scale_x_continuous(breaks = 1:10)) +
       coord_cartesian(xlim = input$ov_xlim + if (input$ov_var %in% score_vars) c(-0.5, 0.5) else 0) +
