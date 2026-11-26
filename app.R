@@ -246,11 +246,11 @@ likert_bar <- function(long, block, item_order, fills, show = c("fill", "stack")
 }
 
 # Wrap a ggplot as an interactive (ggiraph) chart. Hovering shows a small label with the numbers.
-# fade = TRUE: the hovered mark keeps its colour and the other marks fade; axes and text never fade.
-hover_plot <- function(p, height, fade = TRUE) {
+# The hovered mark keeps its colour and the other marks fade; axes and text never fade.
+hover_plot <- function(p, height) {
   girafe(ggobj = p, width_svg = 10, height_svg = height / 100,
          options = list(opts_hover(css = "opacity:1;"),
-                        opts_hover_inv(css = if (fade) "opacity:0.3;" else "opacity:1;"),
+                        opts_hover_inv(css = "opacity:0.3;"),
                         opts_tooltip(css = "background:#1F2A37;color:#FFFFFF;padding:6px 10px;border-radius:6px;font-size:13px;"),
                         opts_toolbar(saveaspng = FALSE), opts_selection(type = "none")))
 }
@@ -314,7 +314,7 @@ ui <- page_navbar(
   nav_panel("RQ2: Domestic vs international", page_body(
     navset_card_pill(
       title = "Do international and domestic students differ in how they use AI?",
-      nav_panel("Proportions", analysis_body("r2p_plot", "r2p_interp", height = 430, interactive = TRUE,
+      nav_panel("Proportions", analysis_body("r2p_plot", "r2p_interp", height = 430,
         controls = ctrl_row(
           selectInput("r2_block", "Topic", choices = block_choices, selected = "replace"),
           sliderInput("r2_xlim", "Horizontal range", min = 0, max = 1, value = c(0, 1), step = 0.05, ticks = FALSE)),
@@ -634,20 +634,18 @@ server <- function(input, output, session) {
     long
   })
 
-  output$r2p_plot <- renderGirafe({
+  output$r2p_plot <- renderPlot({
     d <- r2p_data(); b <- likert_blocks[[input$r2_block]]
     ord <- d |> group_by(item) |> summarise(m = mean(p)) |> arrange(m)
     d$item <- factor(d$item, levels = ord$item)
-    p <- ggplot(d, aes(p, item, colour = status, shape = status)) +
-      geom_point_interactive(aes(tooltip = paste0(item, " \u00b7 ", status, "<br>", sprintf("%.0f%%", 100 * p), " (", k, " of ", n, " students)"),
-                                 data_id = paste(item, status)), size = 4, alpha = .9) +
+    ggplot(d, aes(p, item, colour = status, shape = status)) +
+      geom_point(size = 4, alpha = .9) +
       scale_colour_manual(values = pal()[1:2], name = "Student status") +
       scale_shape_manual(values = c(16, 17), name = "Student status") +
       scale_x_continuous(labels = scales::percent_format(), limits = input$r2_xlim, oob = scales::oob_keep) +
       labs(title = b$title, subtitle = paste("Share of students answering", b$atleast),
            x = "Share of students in each group", y = "Item") +
       plot_theme()
-    hover_plot(p, 430, fade = FALSE)
   })
 
   r2p_tab <- reactive({
