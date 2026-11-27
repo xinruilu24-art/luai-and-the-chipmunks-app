@@ -2,6 +2,8 @@
 
 **Live app:** https://xinruilu815-luai-and-the-chipmunks-app.share.connect.posit.cloud/
 
+**Source code:** https://github.com/xinruilu24-art/luai-and-the-chipmunks-app
+
 An interactive R Shiny website for our STA304 (Fall 2026) group survey on how university students use generative AI for academic work. Readers can filter the data by student status, cGPA band and AI use frequency, change what is plotted, adjust axis ranges and colours, and read a plain-language interpretation next to each result.
 
 ## Files

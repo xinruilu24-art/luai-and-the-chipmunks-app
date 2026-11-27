@@ -321,7 +321,8 @@ ui <- page_navbar(
         controls = ctrl_row(
           selectInput("r2_block", "Topic", choices = block_choices, selected = "replace"),
           sliderInput("r2_xlim", "Horizontal range", min = 0, max = 1, value = c(0, 1), step = 0.05, ticks = FALSE)),
-        details = tableOutput("r2p_table"))),
+        details = tagList(tableOutput("r2p_table"),
+          p(class = "small-note", "Why these tests: each row asks whether the share of students answering at the level shown in the chart differs between domestic and international students, so we compare two proportions. We use the two-proportion test when each group has at least 5 students who did and 5 who did not, because it relies on fairly large counts. When any of these counts is below 5, we use Fisher\u2019s exact test instead, because it stays accurate with small counts. These p-values are not adjusted for testing several items.")))),
       nav_panel("Averages", analysis_body("r2m_plot", "r2m_interp", height = 460,
         controls = ctrl_row(
           selectInput("r2_var", "Measure", choices = c("All four side by side" = "all", mean_labels), selected = "all"),
@@ -330,7 +331,8 @@ ui <- page_navbar(
           div(class = "form-group", tags$label(class = "control-label", "Students"),
               checkboxInput("r2_points", "Show each student as a dot", TRUE)),
           uiOutput("r2_ylim_ui")),
-        details = tableOutput("r2m_table"))),
+        details = tagList(tableOutput("r2m_table"),
+          p(class = "small-note", "Why these tests: each row compares the average answer of domestic and international students, so we use a two-sample t-test. Bartlett\u2019s test first checks whether answers are equally spread out in the two groups. If it finds no clear difference (p \u2265 0.05), we use the pooled t-test, which assumes equal spread; otherwise we use Welch\u2019s t-test, which does not.")))),
       footer = p(class = "small-note", "The student-status filter is ignored on this tab (otherwise there is nothing to compare); the other filters still apply.")
     )
   )),
@@ -386,19 +388,19 @@ ui <- page_navbar(
         p("The survey was a Google Form shared with STA304H5 (Fall 2026) students through Piazza, and taking part was voluntary.
            The data contain ", strong(nrow(survey)), " respondents after keeping only the latest submission for repeated course IDs.
            The data file this app uses does not include those course IDs."),
-        h6("Caveats to keep in mind"),
+        h6("Limitations"),
         tags$ul(
-          tags$li("Not a random sample: students chose to respond, so results describe these respondents and may not represent all STA304 or university students."),
-          tags$li("Everything is self-reported, so answers may be rounded, misremembered or influenced by how people want to appear."),
           tags$li("Some students gave their hours as a range instead of a single number (15 for weekly study hours and 14 for hours per week AI saves); we used the midpoint, and for \u201c<2 hours\u201d we used 1. Open-ended answers (e.g. \u201c15+ hours\u201d) were treated as missing: 4 students for weekly study hours, 4 for hours per week AI saves, and 2 gave no cGPA."),
           tags$li("cGPA was collected in bands (e.g. 3.0\u20133.29), so each student is placed at the middle of their band. For \u201cBelow 2.7\u201d we assume the band starts at 0, so those ", sum(round(survey$cgpa_midpoint, 3) == 1.35, na.rm = TRUE), " students are placed at 1.35, the same choice as in our EDA report. A different lower bound would change any result that uses cGPA, so read those results with caution."),
           tags$li("The 1\u201310 scores come straight from the survey; the export does not record what 1 and 10 stood for. We read higher numbers as \u201cmore\u201d (more frequent, more difficult, more confident)."),
-          tags$li("With about 130 students, small differences can easily be chance. Filtering to small subgroups makes results shakier still."),
           tags$li("The tests and tables count a student as replacing or using something if they answered at least \u201cSometimes\u201d, and as rating a reason important if they answered at least \u201cModerately Important\u201d."),
-          tags$li("The regression assumes equal spread of errors; in our full sample this was borderline (Breusch\u2013Pagan p \u2248 0.049), so treat p-values as approximate."),
-          tags$li("Cronbach\u2019s alpha says whether items move together, not that they measure one underlying idea."),
-          tags$li("We run several tests across tabs, so a single p-value just under 0.05 should be treated cautiously.")
-        )
+          tags$li("In our full sample, the Breusch\u2013Pagan test (p \u2248 0.049) indicates that at the \u03b1 = 0.05 level the regression residuals do not have equal variance; however, we proceeded to do linear regression anyway."),
+          tags$li("We ran many tests across the tabs. Apart from the Holm correction in RQ1, we did not adjust p-values for this (such adjustments are beyond this course), so the chance of at least one false positive (Type I error) is higher than 5%, and a single p-value just under 0.05 should be treated cautiously.")
+        ),
+        h6("Source code"),
+        p("The code for this app and the survey data it uses are on GitHub: ",
+          tags$a("xinruilu24-art/luai-and-the-chipmunks-app",
+                 href = "https://github.com/xinruilu24-art/luai-and-the-chipmunks-app", target = "_blank", .noWS = "after"), ".")
       ),
       card(
         card_header("How to read the results"),
@@ -407,9 +409,6 @@ ui <- page_navbar(
           accordion_panel("Box and violin plots",
             "The box covers the middle half of students and the line inside is the median (the typical student).
              The diamond is the average. A violin is a mirrored histogram: wider means more students at that value."),
-          accordion_panel("Regression effects",
-            "Regression estimates how much confidence changes when one factor goes up by one unit while the others are held fixed.
-             If the 95% confidence interval around an effect crosses 0, we cannot rule out no effect."),
           accordion_panel("\u03b1 (Cronbach\u2019s alpha)",
             "A score, usually between 0 and 1, for how consistently a set of questions moves together. Above 0.7 is usually called acceptable. It can be below 0 when the questions do not move together at all."),
           accordion_panel("p-value",
@@ -782,7 +781,7 @@ server <- function(input, output, session) {
     # adjusted R-squared can drop below 0 when the factors explain almost nothing
     expl <- if (sm$adj.r.squared < 0.005) "the chosen factors explain almost none of the differences in confidence (adjusted R\u00b2 is about 0)"
             else sprintf("the chosen factors together explain about %.0f%% of the differences in confidence (adjusted R\u00b2)", 100 * sm$adj.r.squared)
-    interp_box(sprintf("Using %d students, %s, and the model overall is %s (%s). %s These are associations, not proof that one thing causes another, and most of the variation in confidence is still unexplained.",
+    interp_box(sprintf("Using %d students, %s, and the model overall is %s (%s). %s",
                        m$n, expl, if (pm < 0.05) "statistically clear" else "not statistically clear",
                        fmt_p(pm), sig_txt),
                if ("cgpa_midpoint" %in% input$r3_preds) cgpa_note)
@@ -900,8 +899,11 @@ server <- function(input, output, session) {
     txt <- vapply(split(d, d$Status), function(g)
       paste0(if (input$r4_split) paste0(g$Status[1], " students: ") else "",
              paste(sprintf("%s (\u03b1 = %.2f, %s)", g$Group, g$alpha, alpha_label(g$alpha)), collapse = "; ")), "")
-    interp_box(sprintf("%s. Higher alpha means students who answer one question in a set a certain way tend to answer the others similarly. A high value does not prove the set measures one single idea. \u201cOther\u201d items are left out.",
-                       paste(txt, collapse = ". ")))
+    # number of questions in each set, in the order the bars are drawn
+    k <- d$Items[!duplicated(d$Group)][order(d$Group[!duplicated(d$Group)])]
+    k_txt <- if (length(k) > 1) paste(paste(head(k, -1), collapse = ", "), "and", tail(k, 1)) else k
+    interp_box(sprintf("Each bar is a separate Cronbach\u2019s alpha, calculated only from the questions in that set (%s questions, from left to right). %s. Higher alpha means students who answer one question in a set a certain way tend to answer the others similarly. A high value does not prove the set measures one single idea. \u201cOther\u201d items are left out.",
+                       k_txt, paste(txt, collapse = ". ")))
   })
 
   output$r4_heat <- renderPlot({
@@ -936,7 +938,7 @@ server <- function(input, output, session) {
       importance = c("two reasons for using AI", "Students who value one reason tend to value the other as well."),
       tasks      = c("two academic uses of AI", "Students who use AI for one tend to use it for the other as well."),
       replace    = c("two learning activities replaced by AI", "Students who use AI instead of one activity tend to do the same for the other."))
-    interp_box(sprintf("Each square shows how strongly %s are related. A value closer to 1 means a stronger relationship, while a value closer to 0 means a weaker one. The strongest relationship is between \u201c%s\u201d and \u201c%s\u201d (%s). %s The weakest relationship is between \u201c%s\u201d and \u201c%s\u201d (%s). Darker squares indicate stronger relationships.",
+    interp_box(sprintf("Each square shows how strongly %s are related. A value closer to 1 means a stronger relationship, while a value closer to 0 means a weaker one. The strongest relationship is between \u201c%s\u201d and \u201c%s\u201d (%s). %s The weakest relationship is between \u201c%s\u201d and \u201c%s\u201d (%s). Darker squares indicate stronger relationships. The numbers are the correlations themselves, not p-values: we use them to describe how strongly each pair of items moves together, not to test each pair for significance.",
                        words[1], nm[pr[hi, 1]], nm[pr[hi, 2]], num(v[hi]), words[2],
                        nm[pr[lo, 1]], nm[pr[lo, 2]], num(v[lo])))
   })
